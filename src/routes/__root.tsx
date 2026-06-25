@@ -77,14 +77,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "Mafia Master" },
+      { name: "description", content: "A mobile-first web app for Mafia/Werewolf moderators to secretly assign and reveal player roles." },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "Mafia Master" },
+      { property: "og:description", content: "A mobile-first web app for Mafia/Werewolf moderators to secretly assign and reveal player roles." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "Mafia Master" },
+      { name: "twitter:description", content: "A mobile-first web app for Mafia/Werewolf moderators to secretly assign and reveal player roles." },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/6ccbd65b-ac06-4cfd-8457-e42dd662a13a/id-preview-7bd2d020--150b7378-a9c2-4274-b0ae-463a051de101.lovable.app-1782350067720.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/6ccbd65b-ac06-4cfd-8457-e42dd662a13a/id-preview-7bd2d020--150b7378-a9c2-4274-b0ae-463a051de101.lovable.app-1782350067720.png" },
     ],
     links: [
       {
