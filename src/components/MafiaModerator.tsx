@@ -34,6 +34,7 @@ interface Assignment {
   name: string;
   role: RoleKey;
   seen: boolean;
+  alive: boolean;
 }
 interface SavedGame {
   phase: Phase;
