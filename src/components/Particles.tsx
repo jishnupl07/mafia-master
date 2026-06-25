@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export function Particles({ count = 24 }: { count?: number }) {
   const items = useMemo(
