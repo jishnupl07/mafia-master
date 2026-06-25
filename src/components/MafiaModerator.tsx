@@ -19,6 +19,9 @@ import {
   Stethoscope,
   Shield,
   User,
+  ListChecks,
+  Heart,
+  HeartOff,
 } from "lucide-react";
 import { Particles } from "@/components/Particles";
 import { ROLES, RoleKey, fisherYates } from "@/lib/mafia";
