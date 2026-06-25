@@ -58,7 +58,11 @@ function loadSaved(): SavedGame | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as SavedGame;
+    const parsed = JSON.parse(raw) as SavedGame;
+    if (parsed.assignments) {
+      parsed.assignments = parsed.assignments.map((a) => ({ alive: true, ...a }));
+    }
+    return parsed;
   } catch {
     return null;
   }
