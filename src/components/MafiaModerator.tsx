@@ -19,6 +19,9 @@ import {
   Stethoscope,
   Shield,
   User,
+  ListChecks,
+  Heart,
+  HeartOff,
 } from "lucide-react";
 import { Particles } from "@/components/Particles";
 import { ROLES, RoleKey, fisherYates } from "@/lib/mafia";
@@ -31,6 +34,7 @@ interface Assignment {
   name: string;
   role: RoleKey;
   seen: boolean;
+  alive: boolean;
 }
 interface SavedGame {
   phase: Phase;
@@ -54,7 +58,11 @@ function loadSaved(): SavedGame | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    return JSON.parse(raw) as SavedGame;
+    const parsed = JSON.parse(raw) as SavedGame;
+    if (parsed.assignments) {
+      parsed.assignments = parsed.assignments.map((a) => ({ ...a, alive: a.alive ?? true }));
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -113,6 +121,7 @@ export default function MafiaModerator() {
       name,
       role: shuffledRoles[i],
       seen: false,
+      alive: true,
     }));
     setAssignments(assigns);
     setOpenIdx(null);
@@ -205,6 +214,11 @@ export default function MafiaModerator() {
                 markSeen={(i) =>
                   setAssignments((prev) =>
                     prev.map((a, idx) => (idx === i ? { ...a, seen: true } : a)),
+                  )
+                }
+                toggleAlive={(i) =>
+                  setAssignments((prev) =>
+                    prev.map((a, idx) => (idx === i ? { ...a, alive: !a.alive } : a)),
                   )
                 }
               />
@@ -616,12 +630,16 @@ function RevealPhase({
   openIdx,
   setOpenIdx,
   markSeen,
+  toggleAlive,
 }: {
   assignments: Assignment[];
   openIdx: number | null;
   setOpenIdx: (i: number | null) => void;
   markSeen: (i: number) => void;
+  toggleAlive: (i: number) => void;
 }) {
+  const [rosterOpen, setRosterOpen] = useState(false);
+
   function toggle(i: number) {
     sfx.flip();
     if (openIdx === i) {
@@ -631,6 +649,8 @@ function RevealPhase({
       markSeen(i);
     }
   }
+
+  const aliveCount = assignments.filter((a) => a.alive).length;
 
   return (
     <div className="space-y-4">
@@ -644,8 +664,18 @@ function RevealPhase({
           </span>
         </h1>
         <p className="mt-1 text-xs text-white/50">
-          {assignments.length} players · {assignments.filter((a) => a.seen).length} viewed
+          {assignments.length} players · {aliveCount} alive ·{" "}
+          {assignments.filter((a) => a.seen).length} viewed
         </p>
+        <button
+          onClick={() => {
+            sfx.click();
+            setRosterOpen(true);
+          }}
+          className="mt-4 inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold bg-gradient-to-br from-[#8B5CF6] to-[#06B6D4] text-white shadow-[0_10px_30px_-10px_#8B5CF699] hover:brightness-110 active:scale-[0.97] transition"
+        >
+          <ListChecks className="h-4 w-4" /> View All Roles
+        </button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -659,7 +689,123 @@ function RevealPhase({
           />
         ))}
       </div>
+
+      <RosterSheet
+        open={rosterOpen}
+        onClose={() => setRosterOpen(false)}
+        assignments={assignments}
+        toggleAlive={toggleAlive}
+      />
     </div>
+  );
+}
+
+function RosterSheet({
+  open,
+  onClose,
+  assignments,
+  toggleAlive,
+}: {
+  open: boolean;
+  onClose: () => void;
+  assignments: Assignment[];
+  toggleAlive: (i: number) => void;
+}) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ y: 40, opacity: 0, scale: 0.98 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 40, opacity: 0, scale: 0.98 }}
+            transition={{ type: "spring", stiffness: 280, damping: 26 }}
+            className="glass w-full sm:max-w-lg max-h-[85dvh] rounded-t-3xl sm:rounded-3xl p-5 overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-bold tracking-tight">All Players & Roles</h3>
+                <p className="text-xs text-white/55">
+                  Moderator only · {assignments.filter((a) => a.alive).length} of{" "}
+                  {assignments.length} alive
+                </p>
+              </div>
+              <button
+                onClick={onClose}
+                className="grid h-9 w-9 place-items-center rounded-xl glass hover:bg-white/10"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <ul className="space-y-2 overflow-y-auto pr-1 -mr-1">
+              {assignments.map((a, i) => {
+                const meta = ROLES[a.role];
+                const Icon = ROLE_ICONS[a.role];
+                return (
+                  <li
+                    key={a.name + i}
+                    className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 transition ${
+                      a.alive
+                        ? "bg-white/[0.04] border-white/10"
+                        : "bg-white/[0.02] border-white/5 opacity-60"
+                    }`}
+                  >
+                    <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/10 text-[11px] font-bold">
+                      {i + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div
+                        className={`text-sm font-semibold truncate ${
+                          a.alive ? "text-white" : "line-through text-white/50"
+                        }`}
+                      >
+                        {a.name}
+                      </div>
+                      <div
+                        className={`mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold ${meta.text}`}
+                      >
+                        <Icon className="h-3 w-3" /> {meta.name}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        sfx.click();
+                        toggleAlive(i);
+                      }}
+                      className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-semibold border transition active:scale-[0.97] ${
+                        a.alive
+                          ? "bg-emerald-500/15 border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/25"
+                          : "bg-[#DC2626]/15 border-[#DC2626]/30 text-[#FCA5A5] hover:bg-[#DC2626]/25"
+                      }`}
+                      aria-label={a.alive ? "Mark eliminated" : "Mark alive"}
+                    >
+                      {a.alive ? (
+                        <>
+                          <Heart className="h-3.5 w-3.5" /> Alive
+                        </>
+                      ) : (
+                        <>
+                          <HeartOff className="h-3.5 w-3.5" /> Out
+                        </>
+                      )}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
