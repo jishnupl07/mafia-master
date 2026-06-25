@@ -216,6 +216,11 @@ export default function MafiaModerator() {
                     prev.map((a, idx) => (idx === i ? { ...a, seen: true } : a)),
                   )
                 }
+                toggleAlive={(i) =>
+                  setAssignments((prev) =>
+                    prev.map((a, idx) => (idx === i ? { ...a, alive: !a.alive } : a)),
+                  )
+                }
               />
             </motion.div>
           )}
