@@ -117,6 +117,7 @@ export default function MafiaModerator() {
       name,
       role: shuffledRoles[i],
       seen: false,
+      alive: true,
     }));
     setAssignments(assigns);
     setOpenIdx(null);
