@@ -10,8 +10,6 @@ import {
   Shuffle,
   RotateCcw,
   Eye,
-  Volume2,
-  VolumeX,
   AlertTriangle,
   CheckCircle2,
   Users,
@@ -25,9 +23,8 @@ import {
 } from "lucide-react";
 import { Particles } from "@/components/Particles";
 import { ROLES, RoleKey, fisherYates } from "@/lib/mafia";
-import { sfx, setSoundEnabled, isSoundEnabled } from "@/lib/sfx";
 
-type Phase = "setup" | "reveal";
+type Phase = "setup" | "reveal" | "play";
 type Counts = Record<RoleKey, number>;
 
 interface Assignment {
@@ -41,10 +38,9 @@ interface SavedGame {
   players: string[];
   counts: Counts;
   assignments: Assignment[];
-  sound: boolean;
 }
 
-const STORAGE_KEY = "mafia-moderator-v1";
+const STORAGE_KEY = "mafia-moderator-v2";
 
 const ROLE_ICONS: Record<RoleKey, React.ComponentType<{ className?: string }>> = {
   mafia: Skull,
@@ -79,17 +75,21 @@ export default function MafiaModerator() {
   const [assignments, setAssignments] = useState<Assignment[]>(saved?.assignments ?? []);
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
-  const [sound, setSound] = useState<boolean>(saved?.sound ?? true);
-
-  useEffect(() => setSoundEnabled(sound), [sound]);
+  const [dismissWin, setDismissWin] = useState(false);
 
   // persist
   useEffect(() => {
-    const data: SavedGame = { phase, players, counts, assignments, sound };
+    const data: SavedGame = { phase, players, counts, assignments };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {}
-  }, [phase, players, counts, assignments, sound]);
+  }, [phase, players, counts, assignments]);
+
+  // Reset dismissWin when phase changes or assignments count of alive changes
+  const aliveStatusKey = assignments.map((a) => `${a.name}:${a.alive}`).join(",");
+  useEffect(() => {
+    setDismissWin(false);
+  }, [aliveStatusKey, phase]);
 
   const civilianCount = Math.max(
     0,
@@ -108,7 +108,6 @@ export default function MafiaModerator() {
 
   function startGame() {
     if (!validation.ok) return;
-    sfx.start();
     const roleList: RoleKey[] = [
       ...Array(counts.mafia).fill("mafia"),
       ...Array(counts.doctor).fill("doctor"),
@@ -129,14 +128,12 @@ export default function MafiaModerator() {
   }
 
   function shuffleAgain() {
-    sfx.click();
     setPhase("setup");
     setAssignments([]);
     setOpenIdx(null);
   }
 
   function startNewGame() {
-    sfx.click();
     setPlayers([]);
     setCounts({ mafia: 1, doctor: 1, police: 1, civilian: 0 });
     setAssignments([]);
@@ -148,34 +145,36 @@ export default function MafiaModerator() {
     setConfirmReset(false);
   }
 
+  const aliveMafias = assignments.filter((a) => a.role === "mafia" && a.alive).length;
+  const aliveCivilians = assignments.filter((a) => a.role !== "mafia" && a.alive).length;
+  const totalMafias = assignments.filter((a) => a.role === "mafia").length;
+
+  const gameWinner = (() => {
+    if (phase !== "play") return null;
+    if (totalMafias === 0) return null;
+    if (aliveMafias === 0) return "civilians";
+    if (aliveMafias >= aliveCivilians) return "mafia";
+    return null;
+  })();
+
   return (
     <div className="relative min-h-dvh text-foreground">
       <div className="app-bg" />
       <Particles count={28} />
 
-      <header className="sticky top-0 z-30 backdrop-blur-xl bg-[#0F172A]/60 border-b border-white/5">
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-black/70 border-b border-white/5">
         <div className="mx-auto max-w-5xl px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[#8B5CF6] to-[#06B6D4] glow-primary">
+            <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[#EF4444] to-[#9F1239] glow-primary">
               <Skull className="h-5 w-5 text-white" />
             </div>
             <div className="leading-tight">
               <div className="text-sm font-semibold tracking-tight">Mafia Moderator</div>
               <div className="text-[10px] uppercase tracking-[0.18em] text-white/50">
-                {phase === "setup" ? "Setup" : "Reveal Roles"}
+                {phase === "setup" ? "Setup" : phase === "reveal" ? "Reveal Roles" : "Active Game"}
               </div>
             </div>
           </div>
-          <button
-            onClick={() => {
-              setSound((s) => !s);
-              if (!sound) sfx.click();
-            }}
-            className="grid h-10 w-10 place-items-center rounded-xl glass hover:bg-white/10 transition-colors"
-            aria-label={sound ? "Mute sounds" : "Enable sounds"}
-          >
-            {sound ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
-          </button>
         </div>
       </header>
 
@@ -199,7 +198,7 @@ export default function MafiaModerator() {
                 onStart={startGame}
               />
             </motion.div>
-          ) : (
+          ) : phase === "reveal" ? (
             <motion.div
               key="reveal"
               initial={{ opacity: 0, y: 16 }}
@@ -216,6 +215,19 @@ export default function MafiaModerator() {
                     prev.map((a, idx) => (idx === i ? { ...a, seen: true } : a)),
                   )
                 }
+                onStartPlay={() => setPhase("play")}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="play"
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -16 }}
+              transition={{ duration: 0.3 }}
+            >
+              <PlayPhase
+                assignments={assignments}
                 toggleAlive={(i) =>
                   setAssignments((prev) =>
                     prev.map((a, idx) => (idx === i ? { ...a, alive: !a.alive } : a)),
@@ -227,7 +239,7 @@ export default function MafiaModerator() {
         </AnimatePresence>
       </main>
 
-      {phase === "reveal" && (
+      {(phase === "reveal" || phase === "play") && (
         <footer className="fixed bottom-0 inset-x-0 z-30 border-t border-white/10 bg-[#0F172A]/80 backdrop-blur-xl">
           <div className="mx-auto max-w-5xl px-4 py-3 flex gap-2">
             <button
@@ -290,6 +302,99 @@ export default function MafiaModerator() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <AnimatePresence>
+        {gameWinner && !dismissWin && (
+          <motion.div
+            className="fixed inset-0 z-50 grid place-items-center bg-black/80 backdrop-blur-md p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              transition={{ type: "spring", stiffness: 280, damping: 24 }}
+              className="glass rounded-3xl p-8 max-w-md w-full text-center relative overflow-hidden border border-white/10 shadow-[0_0_50px_0_rgba(0,0,0,0.8)]"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                className={`absolute inset-0 bg-gradient-to-b opacity-10 pointer-events-none ${
+                  gameWinner === "mafia"
+                    ? "from-[#DC2626] to-[#7f1d1d]"
+                    : "from-emerald-500 to-emerald-900"
+                }`}
+              />
+
+              <div className="flex flex-col items-center">
+                <div
+                  className={`grid h-20 w-20 place-items-center rounded-3xl mb-5 shadow-lg ${
+                    gameWinner === "mafia"
+                      ? "bg-[#DC2626]/20 text-[#FCA5A5] border border-[#DC2626]/30 shadow-[#DC2626]/20"
+                      : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shadow-emerald-500/20"
+                  }`}
+                >
+                  {gameWinner === "mafia" ? (
+                    <Skull className="h-10 w-10 animate-bounce" />
+                  ) : (
+                    <CheckCircle2 className="h-10 w-10 animate-bounce" />
+                  )}
+                </div>
+
+                <span
+                  className={`text-[11px] uppercase tracking-[0.25em] font-bold ${
+                    gameWinner === "mafia" ? "text-[#FCA5A5]" : "text-emerald-300"
+                  }`}
+                >
+                  Victory Achieved
+                </span>
+
+                <h2 className="mt-2 text-3xl font-black tracking-tight text-white font-display">
+                  {gameWinner === "mafia" ? "Mafia Wins!" : "Civilians Win!"}
+                </h2>
+
+                <p className="mt-3 text-sm text-white/70 max-w-xs">
+                  {gameWinner === "mafia"
+                    ? "The Mafia has successfully outnumbered the Civilians."
+                    : "All members of the Mafia have been eliminated from the town."}
+                </p>
+
+                <div className="mt-6 w-full rounded-2xl bg-white/[0.04] border border-white/5 p-4 flex justify-around text-sm">
+                  <div>
+                    <span className="block text-xs text-white/40">Mafia Alive</span>
+                    <span className="font-bold text-[#FCA5A5]">{aliveMafias}</span>
+                  </div>
+                  <div className="border-r border-white/10" />
+                  <div>
+                    <span className="block text-xs text-white/40">Civilians Alive</span>
+                    <span className="font-bold text-emerald-300">{aliveCivilians}</span>
+                  </div>
+                </div>
+
+                <div className="mt-8 flex gap-3 w-full">
+                  <button
+                    onClick={() => setDismissWin(true)}
+                    className="flex-1 rounded-xl glass px-4 py-3 text-sm font-semibold hover:bg-white/10 transition active:scale-[0.98]"
+                  >
+                    Review Game
+                  </button>
+                  <button
+                    onClick={startGame}
+                    className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white transition active:scale-[0.98] ${
+                      gameWinner === "mafia"
+                        ? "bg-gradient-to-r from-[#DC2626] to-[#9f1239] shadow-[0_10px_20px_-5px_#dc262699]"
+                        : "bg-gradient-to-r from-emerald-500 to-emerald-700 shadow-[0_10px_20px_-5px_rgba(16,185,129,0.5)]"
+                    }`}
+                  >
+                    Play Again
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -329,12 +434,10 @@ function SetupPhase({
     setPlayers([...players, name]);
     setDraft("");
     setErr(null);
-    sfx.click();
     inputRef.current?.focus();
   }
 
   function removePlayer(i: number) {
-    sfx.click();
     setPlayers(players.filter((_, idx) => idx !== i));
   }
 
@@ -357,7 +460,6 @@ function SetupPhase({
     if (role === "civilian") return;
     const next = Math.max(role === "mafia" ? 1 : 0, counts[role] + delta);
     setCounts({ ...counts, [role]: next });
-    sfx.click();
   }
 
   return (
@@ -369,11 +471,11 @@ function SetupPhase({
           animate={{ opacity: 1, scale: 1 }}
           className="inline-flex items-center gap-2 rounded-full glass px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-white/70"
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-[#8B5CF6] animate-pulse" />
+          <span className="h-1.5 w-1.5 rounded-full bg-[#EF4444] animate-pulse" />
           Moderator Console
         </motion.div>
         <h1 className="mt-3 text-3xl sm:text-4xl font-black tracking-tight">
-          <span className="bg-gradient-to-r from-[#a78bfa] via-[#c4b5fd] to-[#67e8f9] bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-[#FCA5A5] via-[#EF4444] to-[#B91C1C] bg-clip-text text-transparent">
             Mafia Moderator
           </span>
         </h1>
@@ -386,7 +488,7 @@ function SetupPhase({
       <section className="glass rounded-3xl p-5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-xl bg-[#8B5CF6]/20 text-[#c4b5fd]">
+            <div className="grid h-8 w-8 place-items-center rounded-xl bg-[#EF4444]/20 text-[#FCA5A5]">
               <Users className="h-4 w-4" />
             </div>
             <h2 className="text-base font-semibold">Players</h2>
@@ -412,11 +514,11 @@ function SetupPhase({
             }}
             placeholder="Add player name..."
             maxLength={32}
-            className="flex-1 rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#8B5CF6]/60 focus:border-transparent transition"
+            className="flex-1 rounded-2xl bg-white/5 border border-white/10 px-4 py-3 text-sm placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-[#EF4444]/60 focus:border-transparent transition"
           />
           <button
             onClick={addPlayer}
-            className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-3 text-sm font-semibold bg-gradient-to-br from-[#8B5CF6] to-[#7c3aed] text-white shadow-[0_10px_30px_-10px_#8B5CF699] hover:brightness-110 active:scale-[0.97] transition"
+            className="inline-flex items-center gap-1.5 rounded-2xl px-4 py-3 text-sm font-semibold bg-gradient-to-br from-[#EF4444] to-[#B91C1C] text-white shadow-[0_10px_30px_-10px_#EF444499] hover:brightness-110 active:scale-[0.97] transition"
           >
             <Plus className="h-4 w-4" /> Add
           </button>
@@ -435,7 +537,7 @@ function SetupPhase({
                 transition={{ duration: 0.2 }}
                 className="group flex items-center gap-3 rounded-2xl bg-white/[0.04] border border-white/5 px-3 py-2.5 hover:bg-white/[0.07] transition"
               >
-                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-[#8B5CF6]/30 to-[#06B6D4]/30 text-xs font-bold">
+                <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/10 border border-white/5 text-xs font-bold">
                   {i + 1}
                 </div>
                 {editIdx === i ? (
@@ -447,7 +549,7 @@ function SetupPhase({
                       if (e.key === "Enter") commitEdit(i);
                       if (e.key === "Escape") setEditIdx(null);
                     }}
-                    className="flex-1 min-w-0 rounded-lg bg-white/10 border border-white/15 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B5CF6]/60"
+                    className="flex-1 min-w-0 rounded-lg bg-white/10 border border-white/15 px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-[#EF4444]/60"
                   />
                 ) : (
                   <span className="flex-1 min-w-0 truncate text-sm">{p}</span>
@@ -555,8 +657,8 @@ function SetupPhase({
         disabled={!validation.ok}
         className="w-full rounded-3xl py-4 text-base font-bold tracking-tight transition relative overflow-hidden
           disabled:opacity-40 disabled:cursor-not-allowed
-          enabled:bg-gradient-to-r enabled:from-[#8B5CF6] enabled:via-[#7c3aed] enabled:to-[#06B6D4]
-          enabled:text-white enabled:shadow-[0_20px_60px_-15px_#8B5CF699] enabled:hover:brightness-110"
+          enabled:bg-gradient-to-r enabled:from-[#EF4444] enabled:via-[#DC2626] enabled:to-[#9F1239]
+          enabled:text-white enabled:shadow-[0_20px_60px_-15px_#EF444499] enabled:hover:brightness-110"
       >
         <span className="inline-flex items-center justify-center gap-2">
           <Play className="h-5 w-5" /> Start Game
@@ -621,27 +723,22 @@ function RoleCounter({
       </div>
     </div>
   );
-}
-
-/* ---------------- Reveal ---------------- */
+}/* ---------------- Reveal/Play ---------------- */
 
 function RevealPhase({
   assignments,
   openIdx,
   setOpenIdx,
   markSeen,
-  toggleAlive,
+  onStartPlay,
 }: {
   assignments: Assignment[];
   openIdx: number | null;
   setOpenIdx: (i: number | null) => void;
   markSeen: (i: number) => void;
-  toggleAlive: (i: number) => void;
+  onStartPlay: () => void;
 }) {
-  const [rosterOpen, setRosterOpen] = useState(false);
-
   function toggle(i: number) {
-    sfx.flip();
     if (openIdx === i) {
       setOpenIdx(null);
     } else {
@@ -658,23 +755,20 @@ function RevealPhase({
         <div className="inline-flex items-center gap-2 rounded-full glass px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-white/70">
           <Eye className="h-3 w-3" /> Tap a card to reveal
         </div>
-        <h1 className="mt-3 text-3xl sm:text-4xl font-black tracking-tight">
-          <span className="bg-gradient-to-r from-[#a78bfa] to-[#67e8f9] bg-clip-text text-transparent">
+        <h1 className="mt-3 text-3xl sm:text-4xl font-black tracking-tight font-display">
+          <span className="bg-gradient-to-r from-[#FCA5A5] to-[#EF4444] bg-clip-text text-transparent">
             Reveal Roles
           </span>
         </h1>
-        <p className="mt-1 text-xs text-white/50">
+        <p className="mt-1 text-xs text-white/50 font-sans">
           {assignments.length} players · {aliveCount} alive ·{" "}
           {assignments.filter((a) => a.seen).length} viewed
         </p>
         <button
-          onClick={() => {
-            sfx.click();
-            setRosterOpen(true);
-          }}
-          className="mt-4 inline-flex items-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-semibold bg-gradient-to-br from-[#8B5CF6] to-[#06B6D4] text-white shadow-[0_10px_30px_-10px_#8B5CF699] hover:brightness-110 active:scale-[0.97] transition"
+          onClick={onStartPlay}
+          className="mt-4 inline-flex items-center gap-2 rounded-2xl px-5 py-3 text-sm font-bold bg-gradient-to-br from-[#EF4444] to-[#B91C1C] text-white shadow-[0_10px_30px_-10px_#EF444499] hover:brightness-110 active:scale-[0.97] transition"
         >
-          <ListChecks className="h-4 w-4" /> View All Roles
+          <Play className="h-4 w-4" /> Start Mafia
         </button>
       </div>
 
@@ -689,123 +783,120 @@ function RevealPhase({
           />
         ))}
       </div>
-
-      <RosterSheet
-        open={rosterOpen}
-        onClose={() => setRosterOpen(false)}
-        assignments={assignments}
-        toggleAlive={toggleAlive}
-      />
     </div>
   );
 }
 
-function RosterSheet({
-  open,
-  onClose,
+function PlayPhase({
   assignments,
   toggleAlive,
 }: {
-  open: boolean;
-  onClose: () => void;
   assignments: Assignment[];
   toggleAlive: (i: number) => void;
 }) {
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ y: 40, opacity: 0, scale: 0.98 }}
-            animate={{ y: 0, opacity: 1, scale: 1 }}
-            exit={{ y: 40, opacity: 0, scale: 0.98 }}
-            transition={{ type: "spring", stiffness: 280, damping: 26 }}
-            className="glass w-full sm:max-w-lg max-h-[85dvh] rounded-t-3xl sm:rounded-3xl p-5 overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-lg font-bold tracking-tight">All Players & Roles</h3>
-                <p className="text-xs text-white/55">
-                  Moderator only · {assignments.filter((a) => a.alive).length} of{" "}
-                  {assignments.length} alive
-                </p>
-              </div>
-              <button
-                onClick={onClose}
-                className="grid h-9 w-9 place-items-center rounded-xl glass hover:bg-white/10"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
+  const aliveCount = assignments.filter((a) => a.alive).length;
+  const aliveMafias = assignments.filter((a) => a.role === "mafia" && a.alive).length;
+  const aliveCivilians = assignments.filter((a) => a.role !== "mafia" && a.alive).length;
 
-            <ul className="space-y-2 overflow-y-auto pr-1 -mr-1">
-              {assignments.map((a, i) => {
-                const meta = ROLES[a.role];
-                const Icon = ROLE_ICONS[a.role];
-                return (
-                  <li
-                    key={a.name + i}
-                    className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 transition ${
-                      a.alive
-                        ? "bg-white/[0.04] border-white/10"
-                        : "bg-white/[0.02] border-white/5 opacity-60"
+  return (
+    <div className="space-y-6">
+      {/* Play Header */}
+      <div className="text-center pt-2">
+        <div className="inline-flex items-center gap-2 rounded-full glass px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-white/70">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Active Game Dashboard
+        </div>
+        <h1 className="mt-3 text-3xl sm:text-4xl font-black tracking-tight font-display">
+          <span className="bg-gradient-to-r from-[#FCA5A5] to-[#EF4444] bg-clip-text text-transparent">
+            Mafia Game
+          </span>
+        </h1>
+        <p className="mt-1 text-xs text-white/50 font-sans">
+          Eliminate players as the day and night rounds progress.
+        </p>
+      </div>
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 font-sans">
+        <div className="glass rounded-2xl p-4 flex flex-col items-center justify-center text-center border-white/5">
+          <span className="text-[10px] uppercase tracking-wider text-white/40 mb-1">Total Players</span>
+          <span className="text-2xl font-black text-white">{assignments.length}</span>
+        </div>
+        <div className="glass rounded-2xl p-4 flex flex-col items-center justify-center text-center border-[#EF4444]/20">
+          <span className="text-[10px] uppercase tracking-wider text-[#FCA5A5] mb-1">Alive Players</span>
+          <span className="text-2xl font-black text-white">{aliveCount}</span>
+        </div>
+        <div className="glass rounded-2xl p-4 flex flex-col items-center justify-center text-center border-[#DC2626]/20 bg-[#DC2626]/5">
+          <span className="text-[10px] uppercase tracking-wider text-[#FCA5A5] mb-1">Alive Mafia</span>
+          <span className="text-2xl font-black text-[#FCA5A5]">{aliveMafias}</span>
+        </div>
+        <div className="glass rounded-2xl p-4 flex flex-col items-center justify-center text-center border-emerald-500/20 bg-emerald-500/5">
+          <span className="text-[10px] uppercase tracking-wider text-emerald-300 mb-1">Alive Civilians</span>
+          <span className="text-2xl font-black text-emerald-300">{aliveCivilians}</span>
+        </div>
+      </div>
+
+      {/* Roster / Player List */}
+      <section className="glass rounded-3xl p-5 border-white/10 font-sans">
+        <h2 className="text-base font-bold tracking-tight mb-4 text-white font-display">Active Roster</h2>
+        <ul className="space-y-3">
+          {assignments.map((a, i) => {
+            const meta = ROLES[a.role];
+            const Icon = ROLE_ICONS[a.role];
+            return (
+              <motion.li
+                key={a.name + i}
+                layout
+                className={`flex items-center gap-3 rounded-2xl border px-4 py-3.5 transition duration-200 ${
+                  a.alive
+                    ? "bg-white/[0.04] border-white/10 hover:bg-white/[0.06]"
+                    : "bg-white/[0.02] border-white/5 opacity-50"
+                }`}
+              >
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/10 text-xs font-bold text-white/80">
+                  {i + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div
+                    className={`text-sm sm:text-base font-bold truncate transition ${
+                      a.alive ? "text-white" : "line-through text-white/40"
                     }`}
                   >
-                    <div className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-white/10 text-[11px] font-bold">
-                      {i + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div
-                        className={`text-sm font-semibold truncate ${
-                          a.alive ? "text-white" : "line-through text-white/50"
-                        }`}
-                      >
-                        {a.name}
-                      </div>
-                      <div
-                        className={`mt-0.5 inline-flex items-center gap-1 text-[11px] font-semibold ${meta.text}`}
-                      >
-                        <Icon className="h-3 w-3" /> {meta.name}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => {
-                        sfx.click();
-                        toggleAlive(i);
-                      }}
-                      className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-[11px] font-semibold border transition active:scale-[0.97] ${
-                        a.alive
-                          ? "bg-emerald-500/15 border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/25"
-                          : "bg-[#DC2626]/15 border-[#DC2626]/30 text-[#FCA5A5] hover:bg-[#DC2626]/25"
-                      }`}
-                      aria-label={a.alive ? "Mark eliminated" : "Mark alive"}
-                    >
-                      {a.alive ? (
-                        <>
-                          <Heart className="h-3.5 w-3.5" /> Alive
-                        </>
-                      ) : (
-                        <>
-                          <HeartOff className="h-3.5 w-3.5" /> Out
-                        </>
-                      )}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+                    {a.name}
+                  </div>
+                  <div
+                    className={`mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-semibold ${meta.text}`}
+                  >
+                    <Icon className="h-3.5 w-3.5 text-white/80" /> {meta.name}
+                  </div>
+                </div>
+                <button
+                  onClick={() => toggleAlive(i)}
+                  className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[11px] font-bold border transition active:scale-[0.97] ${
+                    a.alive
+                      ? "bg-emerald-500/15 border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/25"
+                      : "bg-[#DC2626]/15 border-[#DC2626]/30 text-[#FCA5A5] hover:bg-[#DC2626]/25"
+                  }`}
+                  aria-label={a.alive ? "Mark eliminated" : "Mark alive"}
+                >
+                  {a.alive ? (
+                    <>
+                      <Heart className="h-3.5 w-3.5 shrink-0 text-emerald-300 animate-pulse" />
+                      <span>Alive</span>
+                    </>
+                  ) : (
+                    <>
+                      <HeartOff className="h-3.5 w-3.5 shrink-0 text-[#FCA5A5]" />
+                      <span>Eliminated</span>
+                    </>
+                  )}
+                </button>
+              </motion.li>
+            );
+          })}
+        </ul>
+      </section>
+    </div>
   );
 }
 
@@ -832,13 +923,13 @@ function PlayerCard({
     >
       <button
         onClick={onClick}
-        className="flip-card w-full h-full block focus:outline-none focus-visible:ring-2 focus-visible:ring-[#8B5CF6] rounded-[1.25rem]"
+        className="flip-card w-full h-full block focus:outline-none focus-visible:ring-2 focus-visible:ring-[#EF4444] rounded-[1.25rem]"
         style={{ transform: open ? "rotateY(180deg)" : "rotateY(0deg)" }}
         aria-label={`${assignment.name} card`}
       >
         {/* FRONT */}
         <div className="flip-face glass flex flex-col items-center justify-center p-3 relative overflow-hidden">
-          <div className="absolute inset-0 bg-gradient-to-br from-[#8B5CF6]/10 via-transparent to-[#06B6D4]/10 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-br from-[#EF4444]/8 via-transparent to-[#EF4444]/3 pointer-events-none" />
           <div className="absolute top-2.5 left-2.5 grid h-6 w-6 place-items-center rounded-lg bg-black/40 border border-white/10 text-[10px] font-bold text-white/70">
             {index + 1}
           </div>
@@ -850,7 +941,7 @@ function PlayerCard({
               <Eye className="h-3 w-3" />
             </div>
           )}
-          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-[#8B5CF6]/30 to-[#06B6D4]/30 border border-white/10 mb-3">
+          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-[#EF4444]/25 to-[#B91C1C]/25 border border-[#EF4444]/20 mb-3">
             <User className="h-6 w-6 text-white/80" />
           </div>
           <div className="text-center text-sm sm:text-base font-bold tracking-tight px-1 line-clamp-2">
