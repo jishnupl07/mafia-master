@@ -60,7 +60,7 @@ function loadSaved(): SavedGame | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as SavedGame;
     if (parsed.assignments) {
-      parsed.assignments = parsed.assignments.map((a) => ({ alive: true, ...a }));
+      parsed.assignments = parsed.assignments.map((a) => ({ ...a, alive: a.alive ?? true }));
     }
     return parsed;
   } catch {
