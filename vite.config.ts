@@ -10,10 +10,9 @@ import { VitePWA } from "vite-plugin-pwa";
 export default defineConfig({
   nitro: { preset: "vercel" },
   tanstackStart: {
-    // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
-    // nitro/vite builds from this
     server: { entry: "server" },
   },
+  build: { outDir: "www" },
   vite: {
     plugins: [
       VitePWA({
@@ -25,6 +24,7 @@ export default defineConfig({
           theme_color: "#0F172A",
           background_color: "#0F172A",
           display: "fullscreen",
+          orientation: "portrait",
           icons: [
             {
               src: "/pwa-192x192.png",
@@ -40,5 +40,8 @@ export default defineConfig({
         },
       }),
     ],
+    build: {
+      outDir: "www",
+    },
   },
 });

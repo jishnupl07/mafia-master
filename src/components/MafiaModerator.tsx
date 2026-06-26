@@ -241,8 +241,8 @@ export default function MafiaModerator() {
       <div className="app-bg" />
       <Particles count={28} />
 
-      <header className="sticky top-0 z-30 backdrop-blur-xl bg-black/70 border-b border-white/5">
-        <div className="mx-auto max-w-5xl px-4 py-3 flex items-center justify-between">
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-black/70 border-b border-white/5 pt-[calc(env(safe-area-inset-top)+0.75rem)] pb-3">
+        <div className="mx-auto max-w-5xl px-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-[#EF4444] to-[#9F1239] glow-primary">
               <Skull className="h-5 w-5 text-white" />
@@ -257,7 +257,7 @@ export default function MafiaModerator() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 pb-40 pt-6">
+      <main className="mx-auto max-w-5xl px-4 pb-[calc(env(safe-area-inset-bottom)+10rem)] pt-6">
         <AnimatePresence mode="wait">
           {phase === "setup" ? (
             <motion.div
@@ -319,11 +319,11 @@ export default function MafiaModerator() {
       </main>
 
       {(phase === "reveal" || phase === "play") && (
-        <footer className="fixed bottom-0 inset-x-0 z-30 border-t border-white/10 bg-[#0F172A]/80 backdrop-blur-xl">
-          <div className="mx-auto max-w-5xl px-4 py-3 flex gap-2">
+        <footer className="fixed bottom-0 inset-x-0 z-30 border-t border-white/10 bg-[#0F172A]/80 backdrop-blur-xl pb-[env(safe-area-inset-bottom)]">
+          <div className="mx-auto max-w-5xl px-4 pt-3 pb-4 flex gap-2">
             <button
-              onClick={shuffleAgain}
-              className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl glass px-4 py-3 text-sm font-semibold hover:bg-white/10 active:scale-[0.98] transition"
+               onClick={shuffleAgain}
+               className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl glass px-4 py-3 text-sm font-semibold hover:bg-white/10 active:scale-[0.98] transition"
             >
               <Shuffle className="h-4 w-4" /> Shuffle Again
             </button>
