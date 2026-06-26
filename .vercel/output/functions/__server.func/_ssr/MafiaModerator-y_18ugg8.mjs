@@ -1,8 +1,8 @@
 import { o as __toESM } from "../_runtime.mjs";
 import { n as require_jsx_runtime, r as require_react } from "../_libs/react+tanstack__react-query.mjs";
 import { n as AnimatePresence, t as motion } from "../_libs/framer-motion.mjs";
-import { _ as TriangleAlert, a as Stethoscope, c as Shield, d as Play, f as Pencil, g as Check, h as Eye, i as Trash2, l as RotateCcw, m as HeartOff, n as Users, o as Skull, p as Heart, r as User, s as Shuffle, t as X, u as Plus, v as CircleCheck } from "../_libs/lucide-react.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/MafiaModerator-B4OZqPjC.js
+import { _ as CircleCheck, a as Stethoscope, c as Shield, d as Play, f as Pencil, g as TriangleAlert, h as Activity, i as Trash2, l as RotateCcw, m as Check, n as Users, o as Skull, p as Eye, r as User, s as Shuffle, t as X, u as Plus, v as ChartColumn } from "../_libs/lucide-react.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/MafiaModerator-y_18ugg8.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 function Particles({ count = 24 }) {
@@ -119,15 +119,25 @@ function MafiaModerator() {
 		civilian: 0
 	});
 	const [assignments, setAssignments] = (0, import_react.useState)(saved?.assignments ?? []);
+	const [rounds, setRounds] = (0, import_react.useState)(saved?.rounds ?? []);
+	const [currentChoices, setCurrentChoices] = (0, import_react.useState)(saved?.currentChoices ?? {
+		mafiaKill: null,
+		doctorSave: null,
+		policeSuspect: null,
+		votedOut: null
+	});
 	const [openIdx, setOpenIdx] = (0, import_react.useState)(null);
 	const [confirmReset, setConfirmReset] = (0, import_react.useState)(false);
 	const [dismissWin, setDismissWin] = (0, import_react.useState)(false);
+	const [showAnalytics, setShowAnalytics] = (0, import_react.useState)(false);
 	(0, import_react.useEffect)(() => {
 		const data = {
 			phase,
 			players,
 			counts,
-			assignments
+			assignments,
+			rounds,
+			currentChoices
 		};
 		try {
 			localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
@@ -136,7 +146,9 @@ function MafiaModerator() {
 		phase,
 		players,
 		counts,
-		assignments
+		assignments,
+		rounds,
+		currentChoices
 	]);
 	(0, import_react.useEffect)(() => {
 		setDismissWin(false);
@@ -180,11 +192,25 @@ function MafiaModerator() {
 			alive: true
 		})));
 		setOpenIdx(null);
+		setRounds([]);
+		setCurrentChoices({
+			mafiaKill: null,
+			doctorSave: null,
+			policeSuspect: null,
+			votedOut: null
+		});
 		setPhase("reveal");
 	}
 	function shuffleAgain() {
 		setPhase("setup");
 		setAssignments([]);
+		setRounds([]);
+		setCurrentChoices({
+			mafiaKill: null,
+			doctorSave: null,
+			policeSuspect: null,
+			votedOut: null
+		});
 		setOpenIdx(null);
 	}
 	function startNewGame() {
@@ -196,12 +222,50 @@ function MafiaModerator() {
 			civilian: 0
 		});
 		setAssignments([]);
+		setRounds([]);
+		setCurrentChoices({
+			mafiaKill: null,
+			doctorSave: null,
+			policeSuspect: null,
+			votedOut: null
+		});
 		setOpenIdx(null);
 		setPhase("setup");
 		try {
 			localStorage.removeItem(STORAGE_KEY);
 		} catch {}
 		setConfirmReset(false);
+	}
+	function executeRound() {
+		const eliminatedThisRound = /* @__PURE__ */ new Set();
+		if (currentChoices.votedOut) eliminatedThisRound.add(currentChoices.votedOut);
+		let noOneEliminated = false;
+		if (currentChoices.mafiaKill && currentChoices.policeSuspect && currentChoices.doctorSave && currentChoices.mafiaKill === currentChoices.policeSuspect && currentChoices.mafiaKill === currentChoices.doctorSave) noOneEliminated = true;
+		if (!noOneEliminated) {
+			if (currentChoices.mafiaKill && currentChoices.mafiaKill !== currentChoices.doctorSave) eliminatedThisRound.add(currentChoices.mafiaKill);
+			if (currentChoices.policeSuspect) {
+				if (assignments.find((a) => a.name === currentChoices.policeSuspect)?.role === "mafia") eliminatedThisRound.add(currentChoices.policeSuspect);
+			}
+		}
+		const newAssignments = assignments.map((a) => {
+			if (eliminatedThisRound.has(a.name)) return {
+				...a,
+				alive: false
+			};
+			return a;
+		});
+		setRounds([...rounds, {
+			roundNumber: rounds.length + 1,
+			choices: currentChoices,
+			eliminated: Array.from(eliminatedThisRound)
+		}]);
+		setAssignments(newAssignments);
+		setCurrentChoices({
+			mafiaKill: null,
+			doctorSave: null,
+			policeSuspect: null,
+			votedOut: null
+		});
 	}
 	const aliveMafias = assignments.filter((a) => a.role === "mafia" && a.alive).length;
 	const aliveCivilians = assignments.filter((a) => a.role !== "mafia" && a.alive).length;
@@ -307,10 +371,11 @@ function MafiaModerator() {
 						transition: { duration: .3 },
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(PlayPhase, {
 							assignments,
-							toggleAlive: (i) => setAssignments((prev) => prev.map((a, idx) => idx === i ? {
-								...a,
-								alive: !a.alive
-							} : a))
+							currentChoices,
+							setCurrentChoices,
+							executeRound,
+							roundNumber: rounds.length + 1,
+							setShowAnalytics
 						})
 					}, "play")
 				})
@@ -450,20 +515,31 @@ function MafiaModerator() {
 								]
 							}),
 							/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-								className: "mt-8 flex gap-3 w-full",
-								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									onClick: () => setDismissWin(true),
-									className: "flex-1 rounded-xl glass px-4 py-3 text-sm font-semibold hover:bg-white/10 transition active:scale-[0.98]",
-									children: "Review Game"
-								}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									onClick: startGame,
-									className: `flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white transition active:scale-[0.98] ${gameWinner === "mafia" ? "bg-gradient-to-r from-[#DC2626] to-[#9f1239] shadow-[0_10px_20px_-5px_#dc262699]" : "bg-gradient-to-r from-emerald-500 to-emerald-700 shadow-[0_10px_20px_-5px_rgba(16,185,129,0.5)]"}`,
-									children: "Play Again"
+								className: "mt-8 flex flex-col gap-3 w-full",
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex gap-3 w-full",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: () => setDismissWin(true),
+										className: "flex-1 rounded-xl glass px-4 py-3 text-sm font-semibold hover:bg-white/10 transition active:scale-[0.98]",
+										children: "Review Game"
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+										onClick: startGame,
+										className: `flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white transition active:scale-[0.98] ${gameWinner === "mafia" ? "bg-gradient-to-r from-[#DC2626] to-[#9f1239] shadow-[0_10px_20px_-5px_#dc262699]" : "bg-gradient-to-r from-emerald-500 to-emerald-700 shadow-[0_10px_20px_-5px_rgba(16,185,129,0.5)]"}`,
+										children: "Play Again"
+									})]
+								}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+									onClick: () => setShowAnalytics(true),
+									className: "w-full rounded-xl glass px-4 py-3 text-sm font-semibold text-white/80 hover:text-white hover:bg-white/10 transition active:scale-[0.98] flex items-center justify-center gap-2",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChartColumn, { className: "h-4 w-4" }), " Game Analytics"]
 								})]
 							})
 						]
 					})]
 				})
+			}) }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnimatePresence, { children: showAnalytics && /* @__PURE__ */ (0, import_jsx_runtime.jsx)(AnalyticsOverlay, {
+				rounds,
+				onClose: () => setShowAnalytics(false)
 			}) })
 		]
 	});
@@ -829,12 +905,18 @@ function RevealPhase({ assignments, openIdx, setOpenIdx, markSeen, onStartPlay }
 		})]
 	});
 }
-function PlayPhase({ assignments, toggleAlive }) {
+function PlayPhase({ assignments, currentChoices, setCurrentChoices, executeRound, roundNumber, setShowAnalytics }) {
 	const aliveCount = assignments.filter((a) => a.alive).length;
 	const aliveMafias = assignments.filter((a) => a.role === "mafia" && a.alive).length;
 	const aliveCivilians = assignments.filter((a) => a.role !== "mafia" && a.alive).length;
+	const handleChoiceToggle = (key, name) => {
+		setCurrentChoices({
+			...currentChoices,
+			[key]: currentChoices[key] === name ? null : name
+		});
+	};
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-		className: "space-y-6",
+		className: "space-y-6 pb-20",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "text-center pt-2",
@@ -845,14 +927,14 @@ function PlayPhase({ assignments, toggleAlive }) {
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
 						className: "mt-3 text-3xl sm:text-4xl font-black tracking-tight font-display",
-						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
 							className: "bg-gradient-to-r from-[#FCA5A5] to-[#EF4444] bg-clip-text text-transparent",
-							children: "Mafia Game"
+							children: ["Round ", roundNumber]
 						})
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mt-1 text-xs text-white/50 font-sans",
-						children: "Eliminate players as the day and night rounds progress."
+						children: "Make choices for each role, then submit the round."
 					})
 				]
 			}),
@@ -903,46 +985,93 @@ function PlayPhase({ assignments, toggleAlive }) {
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 				className: "glass rounded-3xl p-5 border-white/10 font-sans",
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
-					className: "text-base font-bold tracking-tight mb-4 text-white font-display",
-					children: "Active Roster"
-				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", {
-					className: "space-y-3",
-					children: assignments.map((a, i) => {
-						const meta = ROLES[a.role];
-						const Icon = ROLE_ICONS[a.role];
-						return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(motion.li, {
-							layout: true,
-							className: `flex items-center gap-3 rounded-2xl border px-4 py-3.5 transition duration-200 ${a.alive ? "bg-white/[0.04] border-white/10 hover:bg-white/[0.06]" : "bg-white/[0.02] border-white/5 opacity-50"}`,
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex justify-between items-center mb-4",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+							className: "text-base font-bold tracking-tight text-white font-display",
+							children: "Active Roster"
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							onClick: () => setShowAnalytics(true),
+							className: "inline-flex items-center gap-1.5 rounded-xl bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10 hover:text-white transition",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChartColumn, { className: "h-3.5 w-3.5" }), "Analytics"]
+						})]
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", {
+						className: "space-y-4",
+						children: assignments.map((a, i) => {
+							const meta = ROLES[a.role];
+							const Icon = ROLE_ICONS[a.role];
+							return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(motion.li, {
+								layout: true,
+								className: `flex flex-col gap-3 rounded-2xl border px-4 py-4 transition duration-200 ${a.alive ? "bg-white/[0.04] border-white/10" : "bg-white/[0.02] border-white/5 opacity-60"}`,
+								children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "flex items-center gap-3",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: "grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/10 text-xs font-bold text-white/80",
+											children: i + 1
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+											className: "flex-1 min-w-0",
+											children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+												className: `text-sm sm:text-base font-bold truncate transition ${a.alive ? "text-white" : "line-through text-white/40"}`,
+												children: a.name
+											}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+												className: `mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-semibold ${meta.text}`,
+												children: [
+													/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "h-3.5 w-3.5 text-white/80" }),
+													" ",
+													meta.name
+												]
+											})]
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+											className: `inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[10px] font-bold border ${a.alive ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300" : "bg-[#DC2626]/10 border-[#DC2626]/20 text-[#FCA5A5]"}`,
+											children: a.alive ? "ALIVE" : "ELIMINATED"
+										})
+									]
+								}), a.alive && /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-white/5",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: () => handleChoiceToggle("mafiaKill", a.name),
+											className: `rounded-lg px-2 py-2 text-[10px] font-bold uppercase tracking-wider border transition-colors ${currentChoices.mafiaKill === a.name ? "bg-[#DC2626] border-[#DC2626] text-white" : "bg-black/20 border-white/5 text-white/40 hover:bg-white/5"}`,
+											children: "Mafia Kill"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: () => handleChoiceToggle("doctorSave", a.name),
+											className: `rounded-lg px-2 py-2 text-[10px] font-bold uppercase tracking-wider border transition-colors ${currentChoices.doctorSave === a.name ? "bg-blue-600 border-blue-600 text-white" : "bg-black/20 border-white/5 text-white/40 hover:bg-white/5"}`,
+											children: "Doctor Save"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: () => handleChoiceToggle("policeSuspect", a.name),
+											className: `rounded-lg px-2 py-2 text-[10px] font-bold uppercase tracking-wider border transition-colors ${currentChoices.policeSuspect === a.name ? "bg-amber-600 border-amber-600 text-white" : "bg-black/20 border-white/5 text-white/40 hover:bg-white/5"}`,
+											children: "Police Suspect"
+										}),
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+											onClick: () => handleChoiceToggle("votedOut", a.name),
+											className: `rounded-lg px-2 py-2 text-[10px] font-bold uppercase tracking-wider border transition-colors ${currentChoices.votedOut === a.name ? "bg-purple-600 border-purple-600 text-white" : "bg-black/20 border-white/5 text-white/40 hover:bg-white/5"}`,
+											children: "Voted Out"
+										})
+									]
+								})]
+							}, a.name + i);
+						})
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "mt-6 flex justify-end",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+							onClick: executeRound,
+							className: "w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold bg-gradient-to-r from-[#EF4444] to-[#B91C1C] text-white shadow-[0_10px_30px_-10px_#EF444499] hover:brightness-110 active:scale-[0.97] transition",
 							children: [
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-									className: "grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/10 text-xs font-bold text-white/80",
-									children: i + 1
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-									className: "flex-1 min-w-0",
-									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
-										className: `text-sm sm:text-base font-bold truncate transition ${a.alive ? "text-white" : "line-through text-white/40"}`,
-										children: a.name
-									}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
-										className: `mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-semibold ${meta.text}`,
-										children: [
-											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Icon, { className: "h-3.5 w-3.5 text-white/80" }),
-											" ",
-											meta.name
-										]
-									})]
-								}),
-								/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-									onClick: () => toggleAlive(i),
-									className: `inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[11px] font-bold border transition active:scale-[0.97] ${a.alive ? "bg-emerald-500/15 border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/25" : "bg-[#DC2626]/15 border-[#DC2626]/30 text-[#FCA5A5] hover:bg-[#DC2626]/25"}`,
-									"aria-label": a.alive ? "Mark eliminated" : "Mark alive",
-									children: a.alive ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Heart, { className: "h-3.5 w-3.5 shrink-0 text-emerald-300 animate-pulse" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Alive" })] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(HeartOff, { className: "h-3.5 w-3.5 shrink-0 text-[#FCA5A5]" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { children: "Eliminated" })] })
-								})
+								/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Play, { className: "h-4 w-4" }),
+								" Submit Round ",
+								roundNumber
 							]
-						}, a.name + i);
+						})
 					})
-				})]
+				]
 			})
 		]
 	});
@@ -1042,6 +1171,140 @@ function PlayerCard({ index, assignment, open, onClick }) {
 						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Eye, { className: "h-3 w-3" }), " Hide Role"]
 					})
 				]
+			})]
+		})
+	});
+}
+function AnalyticsOverlay({ rounds, onClose }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(motion.div, {
+		className: "fixed inset-0 z-[60] grid place-items-center bg-black/80 backdrop-blur-md p-4",
+		initial: { opacity: 0 },
+		animate: { opacity: 1 },
+		exit: { opacity: 0 },
+		onClick: onClose,
+		children: /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(motion.div, {
+			initial: {
+				scale: .95,
+				opacity: 0,
+				y: 10
+			},
+			animate: {
+				scale: 1,
+				opacity: 1,
+				y: 0
+			},
+			exit: {
+				scale: .95,
+				opacity: 0,
+				y: 10
+			},
+			className: "glass rounded-3xl p-5 max-w-xl w-full max-h-[85vh] flex flex-col relative border border-white/10 shadow-2xl",
+			onClick: (e) => e.stopPropagation(),
+			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex items-center justify-between mb-4 pb-4 border-b border-white/10",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex items-center gap-3",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+						className: "grid h-10 w-10 place-items-center rounded-xl bg-white/10",
+						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Activity, { className: "h-5 w-5 text-white" })
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h3", {
+						className: "text-lg font-bold font-display tracking-tight",
+						children: "Game Analytics"
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-xs text-white/50",
+						children: "Round history & stats"
+					})] })]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					onClick: onClose,
+					className: "grid h-9 w-9 place-items-center rounded-xl bg-white/5 hover:bg-white/10 transition",
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(X, { className: "h-4 w-4" })
+				})]
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "flex-1 overflow-y-auto pr-2 space-y-4 font-sans",
+				children: rounds.length === 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+					className: "text-center py-10 text-white/40 text-sm",
+					children: "No rounds recorded yet."
+				}) : rounds.map((round) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "rounded-2xl bg-white/[0.03] border border-white/5 p-4",
+					children: [
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "text-sm font-bold text-white mb-3",
+							children: ["Round ", round.roundNumber]
+						}),
+						/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "grid grid-cols-2 gap-3 text-xs",
+							children: [
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "bg-black/30 rounded-xl p-2.5 border border-white/5",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "text-white/40 block mb-1",
+										children: "Mafia Kill"
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "font-semibold text-white",
+										children: round.choices.mafiaKill || "—"
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "bg-black/30 rounded-xl p-2.5 border border-white/5",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "text-white/40 block mb-1",
+										children: "Doctor Save"
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "font-semibold text-white",
+										children: round.choices.doctorSave || "—"
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "bg-black/30 rounded-xl p-2.5 border border-white/5",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "text-white/40 block mb-1",
+										children: "Police Suspect"
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "font-semibold text-white",
+										children: round.choices.policeSuspect || "—"
+									})]
+								}),
+								/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+									className: "bg-black/30 rounded-xl p-2.5 border border-white/5",
+									children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "text-white/40 block mb-1",
+										children: "Voted Out"
+									}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+										className: "font-semibold text-white",
+										children: round.choices.votedOut || "—"
+									})]
+								})
+							]
+						}),
+						round.eliminated.length > 0 ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+							className: "mt-3 pt-3 border-t border-white/5",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+								className: "text-[11px] uppercase tracking-wider text-[#FCA5A5] font-bold block mb-1.5",
+								children: [
+									"Eliminated (",
+									round.eliminated.length,
+									"/2 Max)"
+								]
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+								className: "flex flex-wrap gap-2",
+								children: round.eliminated.map((name) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+									className: "inline-flex items-center gap-1.5 rounded-lg bg-[#DC2626]/20 text-[#FCA5A5] px-2.5 py-1 text-xs font-semibold",
+									children: [
+										/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Skull, { className: "h-3 w-3" }),
+										" ",
+										name
+									]
+								}, name))
+							})]
+						}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+							className: "mt-3 pt-3 border-t border-white/5",
+							children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "text-[11px] uppercase tracking-wider text-emerald-400 font-bold block",
+								children: "No eliminations this round."
+							})
+						})
+					]
+				}, round.roundNumber))
 			})]
 		})
 	});

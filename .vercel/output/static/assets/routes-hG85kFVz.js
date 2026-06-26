@@ -1,0 +1,2 @@
+const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/MafiaModerator-BbGnRMO_.js","assets/index-Bf0Hvz05.js"])))=>i.map(i=>d[i]);
+import{n as e,r as t,s as n,t as r}from"./index-Bf0Hvz05.js";var i=n(t()),a=e(),o=(0,i.lazy)(()=>r(()=>import(`./MafiaModerator-BbGnRMO_.js`),__vite__mapDeps([0,1])));function s(){return(0,a.jsx)(i.Suspense,{fallback:(0,a.jsx)(`div`,{className:`min-h-dvh bg-[#0F172A]`}),children:(0,a.jsx)(o,{})})}export{s as component};
