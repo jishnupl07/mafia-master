@@ -89,6 +89,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { name: "twitter:description", content: "A mobile-first web app for Mafia/Werewolf moderators to secretly assign and reveal player roles." },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/6ccbd65b-ac06-4cfd-8457-e42dd662a13a/id-preview-7bd2d020--150b7378-a9c2-4274-b0ae-463a051de101.lovable.app-1782350067720.png" },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/6ccbd65b-ac06-4cfd-8457-e42dd662a13a/id-preview-7bd2d020--150b7378-a9c2-4274-b0ae-463a051de101.lovable.app-1782350067720.png" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
     ],
     links: [
       {

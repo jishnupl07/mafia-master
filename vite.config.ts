@@ -24,7 +24,7 @@ export default defineConfig({
           description: "A premium moderator console for the party game Mafia/Werewolf.",
           theme_color: "#0F172A",
           background_color: "#0F172A",
-          display: "standalone",
+          display: "fullscreen",
           icons: [
             {
               src: "/pwa-192x192.png",
