@@ -58,7 +58,7 @@ interface SavedGame {
   currentChoices: RoundChoices;
 }
 
-const STORAGE_KEY = "mafia-moderator-v2";
+const STORAGE_KEY = "mafia-moderator-v3";
 
 const ROLE_ICONS: Record<RoleKey, React.ComponentType<{ className?: string }>> = {
   mafia: Skull,
