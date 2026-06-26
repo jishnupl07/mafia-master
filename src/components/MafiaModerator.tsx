@@ -20,6 +20,8 @@ import {
   ListChecks,
   Heart,
   HeartOff,
+  BarChart3,
+  Activity,
 } from "lucide-react";
 import { Particles } from "@/components/Particles";
 import { ROLES, RoleKey, fisherYates } from "@/lib/mafia";
@@ -33,11 +35,27 @@ interface Assignment {
   seen: boolean;
   alive: boolean;
 }
+
+export interface RoundChoices {
+  mafiaKill: string | null;
+  doctorSave: string | null;
+  policeSuspect: string | null;
+  votedOut: string | null;
+}
+
+export interface RoundRecord {
+  roundNumber: number;
+  choices: RoundChoices;
+  eliminated: string[];
+}
+
 interface SavedGame {
   phase: Phase;
   players: string[];
   counts: Counts;
   assignments: Assignment[];
+  rounds: RoundRecord[];
+  currentChoices: RoundChoices;
 }
 
 const STORAGE_KEY = "mafia-moderator-v2";
@@ -73,17 +91,22 @@ export default function MafiaModerator() {
     saved?.counts ?? { mafia: 1, doctor: 1, police: 1, civilian: 0 },
   );
   const [assignments, setAssignments] = useState<Assignment[]>(saved?.assignments ?? []);
+  const [rounds, setRounds] = useState<RoundRecord[]>(saved?.rounds ?? []);
+  const [currentChoices, setCurrentChoices] = useState<RoundChoices>(
+    saved?.currentChoices ?? { mafiaKill: null, doctorSave: null, policeSuspect: null, votedOut: null }
+  );
   const [openIdx, setOpenIdx] = useState<number | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const [dismissWin, setDismissWin] = useState(false);
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
   // persist
   useEffect(() => {
-    const data: SavedGame = { phase, players, counts, assignments };
+    const data: SavedGame = { phase, players, counts, assignments, rounds, currentChoices };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     } catch {}
-  }, [phase, players, counts, assignments]);
+  }, [phase, players, counts, assignments, rounds, currentChoices]);
 
   // Reset dismissWin when phase changes or assignments count of alive changes
   const aliveStatusKey = assignments.map((a) => `${a.name}:${a.alive}`).join(",");
@@ -124,12 +147,16 @@ export default function MafiaModerator() {
     }));
     setAssignments(assigns);
     setOpenIdx(null);
+    setRounds([]);
+    setCurrentChoices({ mafiaKill: null, doctorSave: null, policeSuspect: null, votedOut: null });
     setPhase("reveal");
   }
 
   function shuffleAgain() {
     setPhase("setup");
     setAssignments([]);
+    setRounds([]);
+    setCurrentChoices({ mafiaKill: null, doctorSave: null, policeSuspect: null, votedOut: null });
     setOpenIdx(null);
   }
 
@@ -137,12 +164,64 @@ export default function MafiaModerator() {
     setPlayers([]);
     setCounts({ mafia: 1, doctor: 1, police: 1, civilian: 0 });
     setAssignments([]);
+    setRounds([]);
+    setCurrentChoices({ mafiaKill: null, doctorSave: null, policeSuspect: null, votedOut: null });
     setOpenIdx(null);
     setPhase("setup");
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {}
     setConfirmReset(false);
+  }
+
+  function executeRound() {
+    const eliminatedThisRound = new Set<string>();
+
+    if (currentChoices.votedOut) {
+      eliminatedThisRound.add(currentChoices.votedOut);
+    }
+
+    let noOneEliminated = false;
+    if (
+      currentChoices.mafiaKill &&
+      currentChoices.policeSuspect &&
+      currentChoices.doctorSave &&
+      currentChoices.mafiaKill === currentChoices.policeSuspect &&
+      currentChoices.mafiaKill === currentChoices.doctorSave
+    ) {
+      noOneEliminated = true;
+    }
+
+    if (!noOneEliminated) {
+      if (currentChoices.mafiaKill && currentChoices.mafiaKill !== currentChoices.doctorSave) {
+        eliminatedThisRound.add(currentChoices.mafiaKill);
+      }
+
+      if (currentChoices.policeSuspect) {
+        const suspected = assignments.find((a) => a.name === currentChoices.policeSuspect);
+        if (suspected?.role === "mafia") {
+          eliminatedThisRound.add(currentChoices.policeSuspect);
+        }
+      }
+    }
+
+    const newAssignments = assignments.map((a) => {
+      if (eliminatedThisRound.has(a.name)) {
+        return { ...a, alive: false };
+      }
+      return a;
+    });
+
+    setRounds([
+      ...rounds,
+      {
+        roundNumber: rounds.length + 1,
+        choices: currentChoices,
+        eliminated: Array.from(eliminatedThisRound),
+      },
+    ]);
+    setAssignments(newAssignments);
+    setCurrentChoices({ mafiaKill: null, doctorSave: null, policeSuspect: null, votedOut: null });
   }
 
   const aliveMafias = assignments.filter((a) => a.role === "mafia" && a.alive).length;
@@ -228,11 +307,11 @@ export default function MafiaModerator() {
             >
               <PlayPhase
                 assignments={assignments}
-                toggleAlive={(i) =>
-                  setAssignments((prev) =>
-                    prev.map((a, idx) => (idx === i ? { ...a, alive: !a.alive } : a)),
-                  )
-                }
+                currentChoices={currentChoices}
+                setCurrentChoices={setCurrentChoices}
+                executeRound={executeRound}
+                roundNumber={rounds.length + 1}
+                setShowAnalytics={setShowAnalytics}
               />
             </motion.div>
           )}
@@ -372,27 +451,41 @@ export default function MafiaModerator() {
                   </div>
                 </div>
 
-                <div className="mt-8 flex gap-3 w-full">
+                <div className="mt-8 flex flex-col gap-3 w-full">
+                  <div className="flex gap-3 w-full">
+                    <button
+                      onClick={() => setDismissWin(true)}
+                      className="flex-1 rounded-xl glass px-4 py-3 text-sm font-semibold hover:bg-white/10 transition active:scale-[0.98]"
+                    >
+                      Review Game
+                    </button>
+                    <button
+                      onClick={startGame}
+                      className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white transition active:scale-[0.98] ${
+                        gameWinner === "mafia"
+                          ? "bg-gradient-to-r from-[#DC2626] to-[#9f1239] shadow-[0_10px_20px_-5px_#dc262699]"
+                          : "bg-gradient-to-r from-emerald-500 to-emerald-700 shadow-[0_10px_20px_-5px_rgba(16,185,129,0.5)]"
+                      }`}
+                    >
+                      Play Again
+                    </button>
+                  </div>
                   <button
-                    onClick={() => setDismissWin(true)}
-                    className="flex-1 rounded-xl glass px-4 py-3 text-sm font-semibold hover:bg-white/10 transition active:scale-[0.98]"
+                    onClick={() => setShowAnalytics(true)}
+                    className="w-full rounded-xl glass px-4 py-3 text-sm font-semibold text-white/80 hover:text-white hover:bg-white/10 transition active:scale-[0.98] flex items-center justify-center gap-2"
                   >
-                    Review Game
-                  </button>
-                  <button
-                    onClick={startGame}
-                    className={`flex-1 rounded-xl px-4 py-3 text-sm font-semibold text-white transition active:scale-[0.98] ${
-                      gameWinner === "mafia"
-                        ? "bg-gradient-to-r from-[#DC2626] to-[#9f1239] shadow-[0_10px_20px_-5px_#dc262699]"
-                        : "bg-gradient-to-r from-emerald-500 to-emerald-700 shadow-[0_10px_20px_-5px_rgba(16,185,129,0.5)]"
-                    }`}
-                  >
-                    Play Again
+                    <BarChart3 className="h-4 w-4" /> Game Analytics
                   </button>
                 </div>
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAnalytics && (
+          <AnalyticsOverlay rounds={rounds} onClose={() => setShowAnalytics(false)} />
         )}
       </AnimatePresence>
     </div>
@@ -789,17 +882,32 @@ function RevealPhase({
 
 function PlayPhase({
   assignments,
-  toggleAlive,
+  currentChoices,
+  setCurrentChoices,
+  executeRound,
+  roundNumber,
+  setShowAnalytics,
 }: {
   assignments: Assignment[];
-  toggleAlive: (i: number) => void;
+  currentChoices: RoundChoices;
+  setCurrentChoices: (c: RoundChoices) => void;
+  executeRound: () => void;
+  roundNumber: number;
+  setShowAnalytics: (v: boolean) => void;
 }) {
   const aliveCount = assignments.filter((a) => a.alive).length;
   const aliveMafias = assignments.filter((a) => a.role === "mafia" && a.alive).length;
   const aliveCivilians = assignments.filter((a) => a.role !== "mafia" && a.alive).length;
 
+  const handleChoiceToggle = (key: keyof RoundChoices, name: string) => {
+    setCurrentChoices({
+      ...currentChoices,
+      [key]: currentChoices[key] === name ? null : name,
+    });
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-20">
       {/* Play Header */}
       <div className="text-center pt-2">
         <div className="inline-flex items-center gap-2 rounded-full glass px-3 py-1 text-[11px] uppercase tracking-[0.2em] text-white/70">
@@ -808,11 +916,11 @@ function PlayPhase({
         </div>
         <h1 className="mt-3 text-3xl sm:text-4xl font-black tracking-tight font-display">
           <span className="bg-gradient-to-r from-[#FCA5A5] to-[#EF4444] bg-clip-text text-transparent">
-            Mafia Game
+            Round {roundNumber}
           </span>
         </h1>
         <p className="mt-1 text-xs text-white/50 font-sans">
-          Eliminate players as the day and night rounds progress.
+          Make choices for each role, then submit the round.
         </p>
       </div>
 
@@ -838,8 +946,17 @@ function PlayPhase({
 
       {/* Roster / Player List */}
       <section className="glass rounded-3xl p-5 border-white/10 font-sans">
-        <h2 className="text-base font-bold tracking-tight mb-4 text-white font-display">Active Roster</h2>
-        <ul className="space-y-3">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-base font-bold tracking-tight text-white font-display">Active Roster</h2>
+          <button
+            onClick={() => setShowAnalytics(true)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-white/5 px-3 py-1.5 text-xs font-semibold text-white/80 hover:bg-white/10 hover:text-white transition"
+          >
+            <BarChart3 className="h-3.5 w-3.5" />
+            Analytics
+          </button>
+        </div>
+        <ul className="space-y-4">
           {assignments.map((a, i) => {
             const meta = ROLES[a.role];
             const Icon = ROLE_ICONS[a.role];
@@ -847,54 +964,98 @@ function PlayPhase({
               <motion.li
                 key={a.name + i}
                 layout
-                className={`flex items-center gap-3 rounded-2xl border px-4 py-3.5 transition duration-200 ${
+                className={`flex flex-col gap-3 rounded-2xl border px-4 py-4 transition duration-200 ${
                   a.alive
-                    ? "bg-white/[0.04] border-white/10 hover:bg-white/[0.06]"
-                    : "bg-white/[0.02] border-white/5 opacity-50"
+                    ? "bg-white/[0.04] border-white/10"
+                    : "bg-white/[0.02] border-white/5 opacity-60"
                 }`}
               >
-                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/10 text-xs font-bold text-white/80">
-                  {i + 1}
-                </div>
-                <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3">
+                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-white/10 text-xs font-bold text-white/80">
+                    {i + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div
+                      className={`text-sm sm:text-base font-bold truncate transition ${
+                        a.alive ? "text-white" : "line-through text-white/40"
+                      }`}
+                    >
+                      {a.name}
+                    </div>
+                    <div
+                      className={`mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-semibold ${meta.text}`}
+                    >
+                      <Icon className="h-3.5 w-3.5 text-white/80" /> {meta.name}
+                    </div>
+                  </div>
                   <div
-                    className={`text-sm sm:text-base font-bold truncate transition ${
-                      a.alive ? "text-white" : "line-through text-white/40"
+                    className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-[10px] font-bold border ${
+                      a.alive
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-300"
+                        : "bg-[#DC2626]/10 border-[#DC2626]/20 text-[#FCA5A5]"
                     }`}
                   >
-                    {a.name}
-                  </div>
-                  <div
-                    className={`mt-0.5 inline-flex items-center gap-1.5 text-[11px] font-semibold ${meta.text}`}
-                  >
-                    <Icon className="h-3.5 w-3.5 text-white/80" /> {meta.name}
+                    {a.alive ? "ALIVE" : "ELIMINATED"}
                   </div>
                 </div>
-                <button
-                  onClick={() => toggleAlive(i)}
-                  className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-[11px] font-bold border transition active:scale-[0.97] ${
-                    a.alive
-                      ? "bg-emerald-500/15 border-emerald-400/30 text-emerald-200 hover:bg-emerald-500/25"
-                      : "bg-[#DC2626]/15 border-[#DC2626]/30 text-[#FCA5A5] hover:bg-[#DC2626]/25"
-                  }`}
-                  aria-label={a.alive ? "Mark eliminated" : "Mark alive"}
-                >
-                  {a.alive ? (
-                    <>
-                      <Heart className="h-3.5 w-3.5 shrink-0 text-emerald-300 animate-pulse" />
-                      <span>Alive</span>
-                    </>
-                  ) : (
-                    <>
-                      <HeartOff className="h-3.5 w-3.5 shrink-0 text-[#FCA5A5]" />
-                      <span>Eliminated</span>
-                    </>
-                  )}
-                </button>
+
+                {a.alive && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-white/5">
+                    <button
+                      onClick={() => handleChoiceToggle("mafiaKill", a.name)}
+                      className={`rounded-lg px-2 py-2 text-[10px] font-bold uppercase tracking-wider border transition-colors ${
+                        currentChoices.mafiaKill === a.name
+                          ? "bg-[#DC2626] border-[#DC2626] text-white"
+                          : "bg-black/20 border-white/5 text-white/40 hover:bg-white/5"
+                      }`}
+                    >
+                      Mafia Kill
+                    </button>
+                    <button
+                      onClick={() => handleChoiceToggle("doctorSave", a.name)}
+                      className={`rounded-lg px-2 py-2 text-[10px] font-bold uppercase tracking-wider border transition-colors ${
+                        currentChoices.doctorSave === a.name
+                          ? "bg-blue-600 border-blue-600 text-white"
+                          : "bg-black/20 border-white/5 text-white/40 hover:bg-white/5"
+                      }`}
+                    >
+                      Doctor Save
+                    </button>
+                    <button
+                      onClick={() => handleChoiceToggle("policeSuspect", a.name)}
+                      className={`rounded-lg px-2 py-2 text-[10px] font-bold uppercase tracking-wider border transition-colors ${
+                        currentChoices.policeSuspect === a.name
+                          ? "bg-amber-600 border-amber-600 text-white"
+                          : "bg-black/20 border-white/5 text-white/40 hover:bg-white/5"
+                      }`}
+                    >
+                      Police Suspect
+                    </button>
+                    <button
+                      onClick={() => handleChoiceToggle("votedOut", a.name)}
+                      className={`rounded-lg px-2 py-2 text-[10px] font-bold uppercase tracking-wider border transition-colors ${
+                        currentChoices.votedOut === a.name
+                          ? "bg-purple-600 border-purple-600 text-white"
+                          : "bg-black/20 border-white/5 text-white/40 hover:bg-white/5"
+                      }`}
+                    >
+                      Voted Out
+                    </button>
+                  </div>
+                )}
               </motion.li>
             );
           })}
         </ul>
+        
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={executeRound}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-bold bg-gradient-to-r from-[#EF4444] to-[#B91C1C] text-white shadow-[0_10px_30px_-10px_#EF444499] hover:brightness-110 active:scale-[0.97] transition"
+          >
+            <Play className="h-4 w-4" /> Submit Round {roundNumber}
+          </button>
+        </div>
       </section>
     </div>
   );
@@ -982,3 +1143,116 @@ function PlayerCard({
     </motion.div>
   );
 }
+
+function AnalyticsOverlay({
+  rounds,
+  onClose,
+}: {
+  rounds: RoundRecord[];
+  onClose: () => void;
+}) {
+  return (
+    <motion.div
+      className="fixed inset-0 z-[60] grid place-items-center bg-black/80 backdrop-blur-md p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0, y: 10 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0, y: 10 }}
+        className="glass rounded-3xl p-5 max-w-xl w-full max-h-[85vh] flex flex-col relative border border-white/10 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="grid h-10 w-10 place-items-center rounded-xl bg-white/10">
+              <Activity className="h-5 w-5 text-white" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold font-display tracking-tight">Game Analytics</h3>
+              <p className="text-xs text-white/50">Round history & stats</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="grid h-9 w-9 place-items-center rounded-xl bg-white/5 hover:bg-white/10 transition"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto pr-2 space-y-4 font-sans">
+          {rounds.length === 0 ? (
+            <div className="text-center py-10 text-white/40 text-sm">
+              No rounds recorded yet.
+            </div>
+          ) : (
+            rounds.map((round) => (
+              <div
+                key={round.roundNumber}
+                className="rounded-2xl bg-white/[0.03] border border-white/5 p-4"
+              >
+                <div className="text-sm font-bold text-white mb-3">Round {round.roundNumber}</div>
+                
+                <div className="grid grid-cols-2 gap-3 text-xs">
+                  <div className="bg-black/30 rounded-xl p-2.5 border border-white/5">
+                    <span className="text-white/40 block mb-1">Mafia Kill</span>
+                    <span className="font-semibold text-white">
+                      {round.choices.mafiaKill || "—"}
+                    </span>
+                  </div>
+                  <div className="bg-black/30 rounded-xl p-2.5 border border-white/5">
+                    <span className="text-white/40 block mb-1">Doctor Save</span>
+                    <span className="font-semibold text-white">
+                      {round.choices.doctorSave || "—"}
+                    </span>
+                  </div>
+                  <div className="bg-black/30 rounded-xl p-2.5 border border-white/5">
+                    <span className="text-white/40 block mb-1">Police Suspect</span>
+                    <span className="font-semibold text-white">
+                      {round.choices.policeSuspect || "—"}
+                    </span>
+                  </div>
+                  <div className="bg-black/30 rounded-xl p-2.5 border border-white/5">
+                    <span className="text-white/40 block mb-1">Voted Out</span>
+                    <span className="font-semibold text-white">
+                      {round.choices.votedOut || "—"}
+                    </span>
+                  </div>
+                </div>
+
+                {round.eliminated.length > 0 ? (
+                  <div className="mt-3 pt-3 border-t border-white/5">
+                    <span className="text-[11px] uppercase tracking-wider text-[#FCA5A5] font-bold block mb-1.5">
+                      Eliminated ({round.eliminated.length}/2 Max)
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {round.eliminated.map((name) => (
+                        <span
+                          key={name}
+                          className="inline-flex items-center gap-1.5 rounded-lg bg-[#DC2626]/20 text-[#FCA5A5] px-2.5 py-1 text-xs font-semibold"
+                        >
+                          <Skull className="h-3 w-3" /> {name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 pt-3 border-t border-white/5">
+                    <span className="text-[11px] uppercase tracking-wider text-emerald-400 font-bold block">
+                      No eliminations this round.
+                    </span>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
